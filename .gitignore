@@ -105,3 +105,4 @@ _ReSharper*/
 #Nuget packages folder
 packages/
 dist/
+/.vscode/settings.json

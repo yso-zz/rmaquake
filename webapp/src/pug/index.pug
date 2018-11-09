@@ -2,10 +2,40 @@
 html(lang='en')
   head
     meta(charset='utf-8')
-    title Earthquakes and Eruptions
-        
+    title Earthquakes and Eruptions    
     link(rel='stylesheet', href='../sass/main.sass')
 
-  body
-    div#map
-    script(src='../js/main.js')
+  body.standard-text  
+    div#header      
+      .title Worldwide Signifikant Earthquakes and Eruptions 1900 - 2018
+        button#info-button i
+        div.overlay-background.collapsed
+        div.message-overlay.hidden The earthquake data displayed here comes from the database of the US Geological Survey and covers all reported earthquakes with magnitude 6 or greater from 1900 to 2018. As a reference, you might consider the 2009 and 2016 earthquakes in Italy with a magnitude of 6.3 and 6.6 respectively.
+          div.head Notes
+          li.hint The magnitude is only a measure of the energy released during an earthquake. The effective damage potential depends on many other criteria like depth and duration of an earthquakes or the vicinity and density of settlements.
+          li.hint Volcanic eruptions are not yet shown.
+          div.head Usage
+          li.hint Use the 'play/pause' button to replay the data by year or interrupt the replay.
+          li.hint Initially, the replay speed translates into a pause of 2s to load a new year's data and 1s for each individual earthquake to appear. The 'fast-forward' button allows you to reduce the wait time.
+          li.hint To hide this information message, just click on it.
+      a.link(href="https://earthquake.usgs.gov/earthquakes/search/") USGS earthquake search
+      a.link(href="https://www.ngdc.noaa.gov/nndc/servlet/ShowDatasets?dataset=102557&search_look=50&display_look=50") NOAA significant volcanic eruption database search      
+      div#header-data-row        
+        img.playbutton#play-toggle(src="../../img/if_play-pause-music-player_2203516.svg", alt="pause/play")
+        div.playbutton#play-speedup
+          div.table-row
+            img.table-cell#speed-image(src="../../img/if_forward-play-fast-move_2203517.svg", alt="increase speed")
+            div.table-cell
+            div.table-cell#speed-indicator 1x        
+    div#main-grid
+      div#description-header Counts by Magnitude
+        div#data-description 
+          div.header-cell Year
+          div.header-cell 6 - 6.9
+          div.header-cell 7 - 7.9
+          div.header-cell 8 - 8.9
+          div.header-cell.last 9+
+      #map
+    div
+      canvas#overall-stats.barchart
+  script(src='../js/main.js')

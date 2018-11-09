@@ -42,11 +42,11 @@ console.log("Running application from file: " + __filename);
 
 var runTime = 0;
 var timer = setInterval(function () {
-    runTime += 10;
+    runTime += 100;
     console.log("Server has been running for " + runTime + " seconds")
-    if (runTime === 3600) {
+    if (runTime === 360000) {
         console.log("Shutting down server...")
         clearInterval(timer);
         server.close();
     }
-}, 10000)
+}, 100000)

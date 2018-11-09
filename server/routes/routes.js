@@ -1,3 +1,5 @@
+var geojsonQuakeCache = {};
+
 module.exports = function (app, dataSource) {
 
     app.get('/', (req, res) => {
@@ -22,7 +24,7 @@ module.exports = function (app, dataSource) {
                 ;
             }
         });
-        res.send( result );
+        res.send(result);
     });
 
     app.route('/quakes/:place').get((req, res) => {
@@ -36,13 +38,32 @@ module.exports = function (app, dataSource) {
                 }
             }
         });
-        res.send( result );
+        res.send(result);
     });
 
-    app.route('/geojson/quakes/').get((req, res) => {        
+    app.route('/geojson/quakes/:year').get((req, res) => {
+        const year = parseInt(req.params['year']);
+        if (!year){
+            res.send('No data found for year ' + year);
+            return;
+        }
+        
+        result = dataSource.getGeoJsonQuakesPerYear(dataSource.getQuakes(), year);
+        if (result){
+            res.send(result);
+            if (!result.hasOwnProperty('features')){
+                console.error('Data incomplete for year: ' + year);
+            }
+            return;
+        }
+        
+        res.send('No data found for year ' + year);
+    });
+
+    app.route('/geojson/quakes/all').get((req, res) => {
         var result;
-        result = dataSource.toGeoJson(dataSource.getQuakes());
-        res.send( result );
+        result = dataSource.toGeoJsonQuakesRaw(dataSource.getQuakes());
+        res.send(result);
         dataSource.saveAllData(result, 'test.geojson');
     });
 };
