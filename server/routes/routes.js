@@ -51,7 +51,7 @@ module.exports = function (app, dataSource) {
         result = dataSource.getGeoJsonQuakesPerYear(dataSource.getQuakes(), year);
         if (result){
             res.send(result);
-            if (!result.hasOwnProperty('features')){
+            if (!result[1].hasOwnProperty('features')){
                 console.error('Data incomplete for year: ' + year);
             }
             return;

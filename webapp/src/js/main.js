@@ -18,6 +18,14 @@ import OSM from 'ol/source/osm';
 import { fromLonLat } from 'ol/proj';
 import Chart from 'chart.js';
 
+// global variables and helper functions
+var replaySpeed = 1;
+var running = 0;
+var pos = function () {
+    return fromLonLat([7.906754, 47.316216]);
+};
+
+// bar chart data template with empty data arrays to filled later
 var barChartData = {
     labels: [],
     datasets: [{
@@ -45,6 +53,7 @@ var barChartData = {
     ]
 };
 
+// loads the bar chart with the empty data template
 var loadchart = function () {
     var ctx = document.getElementById('overall-stats').getContext('2d');
     window.myBar = new Chart(ctx, {
@@ -82,10 +91,6 @@ var loadchart = function () {
 
 loadchart();
 
-var pos = function () {
-    return fromLonLat([7.906754, 47.316216]);
-};
-
 const map = new Map({
     target: 'map',
     layers: [
@@ -102,6 +107,7 @@ const map = new Map({
     })
 });
 
+// animation function for the map layer displaying the red rings extending from the center of an earthquake
 var duration = 3000;
 function flash(feature) {
     var start = new Date().getTime();
@@ -151,6 +157,7 @@ info.tooltip({
     trigger: 'manual'
 });
 
+// display additional information when hovering over an earthquake (not yet functional)
 var displayFeatureInfo = function (pixel) {
     info.css({
         left: pixel[0] + 'px',
@@ -237,6 +244,7 @@ var initVectorSource = () => {
     return source;
 }
 
+// style definitions with caching for the filled circles on the map 
 var styleCacheQuake = {};
 var styleCacheQuakeText = {};
 var styleFunction = function (feature) {
@@ -285,7 +293,7 @@ var styleFunction = function (feature) {
         styleCacheQuake[radius] = style;
     }
 
-    if (magnitude <= 8.0) {
+    if (magnitude <= 7.0) {
         return style;
     }
     var key = 'text' + feature.get('name') + feature.get('magnitude');
@@ -305,12 +313,21 @@ var styleFunction = function (feature) {
     return [style, styleCacheQuakeText[key]];
 };
 
+// geo mapping is all about projections and correctly applying them, or the map won't show anything
 const geojsonFormat = new GeoJSON({
     defaultDataProjection: 'EPSG:4326',
     featureProjection: 'EPSG:3857',
     extractStyles: true
 });
 
+// variables to store data we load from the backend
+var yearCounter = 1900;
+var currentVectorSource;
+var currentFeatures = [];
+var statistics = {};
+var layerDictionary = {};
+
+// extends the statistics table and bar chart with new data for a year 
 var appendStatistics = function (year) {
     //extend statistics table and barchart
     var description = $("#data-description ");
@@ -332,12 +349,7 @@ var appendStatistics = function (year) {
     myBar.update();
 }
 
-var yearCounter = 1900;
-var currentVectorSource;
-var currentFeatures = [];
-var statistics = {};
-var layerDictionary = {};
-
+// asynchronously loads data for a single year from the backend
 var fetchYear = (year) => {
     fetch('http://localhost:4000/geojson/quakes/' + year)
         .then(function (res) {
@@ -381,6 +393,7 @@ var fetchYear = (year) => {
         .catch(err => console.error(err));
 }
 
+// adds a single earthquake feature to the layer on the map
 function draw() {
     if (currentFeatures.length > 0) {
         currentVectorSource.addFeature(currentFeatures[0]);
@@ -388,66 +401,103 @@ function draw() {
     }
 }
 
+// removes all data and several indicators from the UI, so that the replay can start from scratch
+var cleanUp = () => {
+    // clear the map
+    for (let key in layerDictionary) {
+        if (!layerDictionary.hasOwnProperty(key)) continue;
+        map.removeLayer(layerDictionary[key]);
+        delete layerDictionary[key];                
+    }
+    
+    // clear the year indicators
+    let yearBoxes = $(".year-box");
+    yearBoxes.remove();                
+    
+    // clear the data cells in the table display
+    let dataCells = $(".data-cell");
+    dataCells.remove();                
+                           
+    // clear barchart
+    barChartData.labels = [];
+    barChartData.datasets[0].data = [];
+    barChartData.datasets[1].data = [];
+    barChartData.datasets[2].data = [];
+    barChartData.datasets[3].data = [];
+    myBar.update();
+    
+    let headerRow = $("#header-data-row");
+    headerRow.append("<div class='year-box hidden-opacity' id='init'><div class='year-info' id='init'>loading...</div>" + "</div>");
+    yearCounter = 1900
+    return;
+}
+
+// adds new indicators for the years visible on the map and in the table
+var extendYearIndicators = ()=>{
+    //extend year indicators
+    let existing = $("#init");
+
+    if (yearCounter > 1900) {
+        let selector = "#yb";
+        selector += yearCounter - 1;
+        existing = $(selector);
+    }
+
+    existing.after("<div class='year-box hidden-opacity' id='yb" + yearCounter + "'> <div class='year-info' id='yi" + yearCounter + "'></div>" + "</div>");
+    existing.removeClass('highlight')
+    let newBox = $("#yb" + yearCounter);
+    newBox.addClass('highlight');
+    opacityAnimationFast(newBox);
+
+    if (yearCounter === 1900) {
+        existing.remove();
+    }
+
+    let newYear = $("#yi" + yearCounter);
+    fadeOutAnimation(newYear, yearCounter);
+    opacityAnimationSlow(newYear);
+}
+
+// refreshes the application with new data, unless a cleanup is required
 function refresh() {
     if (currentFeatures.length === 0) {
-        if (yearCounter % 2019 === 0) {
-            yearCounter = 1900
-            for (let key in layerDictionary) {
-                if (!layerDictionary.hasOwnProperty(key)) continue;
-                map.removeLayer(layerDictionary[key]);
-                delete layerDictionary[key];
-
-                let selector = ".year-box";
-                selector += yearCounter - 1;
-                existing = $(selector);
-                existing.remove();
-
-                selector = "#header-data-row";
-                existing = $(selector);
-                existing.append("<div class='year-box hidden-opacity' id='init'><div class='year-info' id='init'>loading...</div>" + "</div>");
-            }
-            barChartData.labels = [];
-            barChartData.datasets[0].data = [];
-            barChartData.datasets[1].data = [];
-            barChartData.datasets[2].data = [];
-            barChartData.datasets[3].data = [];
-            myBar.update();
-            return;
+        if (yearCounter % 2019 === 0) {                        
+            cleanUp();
         }
 
         fetchYear(yearCounter);
-
-        //extend year indicators
-        let existing = $("#init");
-
-        if (yearCounter > 1900) {
-            let selector = "#yb";
-            selector += yearCounter - 1;
-            existing = $(selector);
-        }
-
-        existing.after("<div class='year-box hidden-opacity' id='yb" + yearCounter + "'> <div class='year-info' id='yi" + yearCounter + "'></div>" + "</div>");
-        existing.removeClass('highlight')
-        let newBox = $("#yb" + yearCounter);
-        newBox.addClass('highlight');
-        opacityAnimationFast(newBox);
-
-        if (yearCounter === 1900) {
-            existing.remove();
-        }
-
-        let newYear = $("#yi" + yearCounter);
-        fadeOutAnimation(newYear, yearCounter);
-        opacityAnimationSlow(newYear);
-
+        extendYearIndicators();
         yearCounter++;
     }
 }
 
-var replaySpeed = 1;
-var running = 0;
+// periodically check whether new data should be loaded
+var refreshInterval = () => {
+    if (running === 1) {
+        refresh();
+    }
+    if (yearCounter % 2019 === 0){
+        setTimeout(refreshInterval, 10000);
+        return;
+    }
+    setTimeout(refreshInterval, 4096 / replaySpeed);
+}
 
-var initControls = () => {
+refreshInterval();
+
+// draw earthquakes depending on speed  
+var replayYear = () => {
+    if (running === 1) {
+        draw();
+    }
+    setTimeout(replayYear, 1024 / replaySpeed);
+}
+
+replayYear();
+
+
+// initializes the various interactive controls
+var initControls = () => {    
     let playToggleButton = $("#play-toggle");
     playToggleButton.on('click', function (evt) {
         if (!running) {
@@ -530,23 +580,4 @@ var initControls = () => {
 
 initControls();
 
-// periodically check whether new data should be loaded
-var refreshInterval = () => {
-    if (running === 1) {
-        refresh();
-    }
-    setTimeout(refreshInterval, 4096 / replaySpeed);
-}
-
-refreshInterval();
-
-// draw earthquakes depending on speed  
-var replayYear = () => {
-    if (running === 1) {
-        draw();
-    }
-    setTimeout(replayYear, 1024 / replaySpeed);
-}
-
-replayYear();
 
