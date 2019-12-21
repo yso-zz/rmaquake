@@ -60,8 +60,34 @@ module.exports = function (app, dataSource) {
         res.send('No data found for year ' + year);
     });
 
+    app.route('/geojson/quake-eruptions/:year').get((req, res) => {
+        const year = parseInt(req.params['year']);
+        if (!year){
+            res.send('No data found for year ' + year);
+            return;
+        }
+        
+        result = dataSource.getGeoJsonQuakesAndEruptionsPerYear(dataSource.getQuakes(), dataSource.getEruptions(), year);
+        if (result){
+            res.send(result);
+            if (!result[1].hasOwnProperty('features')){
+                console.error('Data incomplete for year: ' + year);
+            }
+            return;
+        }
+        
+        res.send('No data found for year ' + year);
+    });
+
+    app.route('/geojson/eruptions/all').get((req, res) => {
+        let result;
+        result = dataSource.toGeoJsonEruptionsRaw(dataSource.getEruptions());
+        res.send(result);
+    });
+
+
     app.route('/geojson/quakes/all').get((req, res) => {
-        var result;
+        let result;
         result = dataSource.toGeoJsonQuakesRaw(dataSource.getQuakes());
         res.send(result);
         dataSource.saveAllData(result, 'test.geojson');

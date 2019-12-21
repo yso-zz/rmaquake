@@ -6,6 +6,7 @@ var fs = require('fs')
 var quakeJson;
 var erupJson;
 var geojsonQuakeCache = {};
+var geojsonEruptionCache = {};
 var statisticsQuakeCache = {};
 
 dataSource = {
@@ -14,18 +15,18 @@ dataSource = {
         return quakeJson;
     },
 
-    getEruptions:  () =>  {
+    getEruptions: () => {
         return erupJson;
     },
 
     toGeoJsonQuakeRecords: (data) => {
-        var features = [];        
-        var i = 0;
+        let features = [];
+        let i = 0;
         data.forEach(e => {
             if (e.place && parseFloat(e.mag) >= 6) {
-                var date = new Date (Date.parse(e.time));
-                if (date){
-                    var obj = {
+                let date = new Date(Date.parse(e.time));
+                if (date) {
+                    let obj = {
                         type: 'Feature',
                         geometry: {
                             type: 'Point',
@@ -36,28 +37,52 @@ dataSource = {
                             magnitude: e.mag,
                             year: date.getFullYear(),
                             month: date.getMonth(),
-                            day: date.getDay()                       
+                            day: date.getDay()
                         }
-                    };                
+                    };
                     features[i] = obj;
                     i++;
                 }
             }
         });
-        features.sort((a,b,) => {            
-            var monthDiff = b.properties.month - a.properties.month;
-            var dayDiff = b.properties.day - a.properties.day;
-            if (monthDiff === 0){
-                return dayDiff;
+        features.sort((a, b) => { sortFeaturesByDate(a, b) });
+        return features;
+    },
+
+    toGeoJsonEruptionRecords: (data) => {
+        let features = [];
+        let i = 0;
+        data.forEach(e => {
+            if (e.Year) {
+                let obj = {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        'coordinates': [parseFloat(e.Longitude), parseFloat(e.Latitude)]
+                    },
+                    properties: {
+                        elevation: e.Elevation,
+                        name: e.Name,
+                        location: e.Location,
+                        country: e.Country,
+                        type: e.Type,
+                        deaths: e.TOTAL_DEATHS,
+                        year: parseInt(e.Year),
+                        month: parseInt(e.Month),
+                        day: parseInt(e.Day)
+                    }
+                };
+                features[i] = obj;
+                i++;
             }
-            return monthDiff;
         });
+        features.sort((a, b) => { sortFeaturesByDate(a, b) });
         return features;
     },
 
     toGeoJsonQuakesRaw: (data) => {
-        var features = dataSource.toGeoJsonQuakeRecords(data);
-        var geojsonObject = {
+        let features = dataSource.toGeoJsonQuakeRecords(data);
+        let geojsonObject = {
             type: 'FeatureCollection',
             crs: {
                 type: 'name',
@@ -66,12 +91,12 @@ dataSource = {
                 }
             },
             features: features
-        };        
+        };
         return geojsonObject;
     },
 
     toGeoJsonEruptionsRaw: (data) => {
-        var features = dataSource.toGeoJsonQuakeRecords(data);
+        let features = dataSource.toGeoJsonEruptionRecords(data);
         var geojsonObject = {
             type: 'FeatureCollection',
             crs: {
@@ -81,12 +106,12 @@ dataSource = {
                 }
             },
             features: features
-        };        
+        };
         return geojsonObject;
     },
 
     toGeoJson: (data) => {
-        var geojsonObject = {
+        let geojsonObject = {
             type: 'FeatureCollection',
             crs: {
                 type: 'name',
@@ -95,66 +120,51 @@ dataSource = {
                 }
             },
             features: data
-        };        
+        };
         return geojsonObject;
     },
 
     getGeoJsonQuakesPerYear: (data, year) => {
         var result = geojsonQuakeCache[year];
-        if (result) {         
+        if (result) {
             return [statisticsQuakeCache[year], dataSource.toGeoJson(result)]; // cache lookup successful            
         }
 
-        let geojsonRecords = dataSource.toGeoJsonQuakeRecords(data);
-        let yearSet = [];
-        var sumMag6 = 0;
-        var sumMag7 = 0;
-        var sumMag8 = 0;
-        var sumMag9 = 0;
-        var i = 0;
-        geojsonRecords.forEach(g => {
-            if (g.properties['year'] === year){
-                yearSet[i] = g;
-                if (g.properties['magnitude'] < 7.0){
-                    sumMag6++;
-                }
-                else if (g.properties['magnitude'] < 8.0){
-                    sumMag7++;
-                }
-                else if (g.properties['magnitude'] < 9.0){
-                    sumMag8++;
-                }
-                else if (g.properties['magnitude'] >= 9.0){
-                    sumMag9++;
-                }
-                i++;
-            }
-        });
-        geojsonQuakeCache[year] = yearSet;
-        statisticsQuakeCache[year] = {
-            'year' : year,
-            'mag6' : sumMag6,
-            'mag7' : sumMag7,
-            'mag8' : sumMag8,
-            'mag9' : sumMag9
-        };
-        result = yearSet;
-        if (result) {         
+        result = extractQuakeDataForYear(data, year);
+
+        if (result) {
             return [statisticsQuakeCache[year], dataSource.toGeoJson(result)]; // cache lookup successful
         }
 
         return null; // there was no data for that year in the first place
     },
 
+    getGeoJsonQuakesAndEruptionsPerYear: (qData, eData, year) => {
+        let qResult = geojsonQuakeCache[year];
+        let eResult = geojsonEruptionCache[year];
+        if (qResult && eResult) {
+            return [statisticsQuakeCache[year], dataSource.toGeoJson(qResult), dataSource.toGeoJson(eResult)]; // cache lookup successful            
+        }
+
+        qResult = extractQuakeDataForYear(qData, year);
+        eResult = extractEruptionDataForYear(eData, year);
+
+        if (qResult || eResult) {
+            return [statisticsQuakeCache[year], dataSource.toGeoJson(qResult), dataSource.toGeoJson(eResult)]; // cache lookup successful
+        }
+
+        return null; // there was no data for that year in the first place
+    },
+
     loadAllQuakes: async () => {
-        var jsonArray = await csv({ delimiter: ',' }).fromFile(quakesFilePath);
+        let jsonArray = await csv({ delimiter: ',' }).fromFile(quakesFilePath);
         return jsonArray;
     },
 
     saveAllData: async function (jsonArray, file) {
-        var jsonString = JSON.stringify(jsonArray).replace(/\\u0000/gi, '');
-        var jsonString = jsonString.replace('{', '{\n');
-        var jsonString = jsonString.replace(',', ',\n');
+        let jsonString = JSON.stringify(jsonArray).replace(/\\u0000/gi, '');
+        jsonString = jsonString.replace('{', '{\n');
+        jsonString = jsonString.replace(',', ',\n');
 
         fs.writeFile(file, jsonString, function (err, data) {
             if (err) {
@@ -168,7 +178,7 @@ dataSource = {
     },
 
     loadAllEruptions: async function () {
-        var jsonArray = await csv({ delimiter: ';' }).fromFile(volcanoFilePath);
+        let jsonArray = await csv({ delimiter: ';' }).fromFile(volcanoFilePath);
         return jsonArray;
     },
 
@@ -178,7 +188,7 @@ dataSource = {
     },
 
     initialize: function () {
-        var dataPromise = new Promise(function (resolve, reject) {
+        let dataPromise = new Promise(function (resolve, reject) {
             resolve(dataSource.loadAllData());
         });
         return dataPromise;
@@ -186,3 +196,68 @@ dataSource = {
 };
 
 module.exports = dataSource;
+
+var extractQuakeDataForYear = (qData, year) => {
+    let qGeoJsonRecords = dataSource.toGeoJsonQuakeRecords(qData);
+    let yearSet = [];
+    let sumMag6 = 0;
+    let sumMag7 = 0;
+    let sumMag8 = 0;
+    let sumMag9 = 0;
+    let i = 0;
+    qGeoJsonRecords.forEach(g => {
+        if (g.properties['year'] === year) {
+            yearSet[i] = g;
+            if (g.properties['magnitude'] < 7.0) {
+                sumMag6++;
+            }
+            else if (g.properties['magnitude'] < 8.0) {
+                sumMag7++;
+            }
+            else if (g.properties['magnitude'] < 9.0) {
+                sumMag8++;
+            }
+            else if (g.properties['magnitude'] >= 9.0) {
+                sumMag9++;
+            }
+            i++;
+        }
+    });
+    geojsonQuakeCache[year] = yearSet;
+    statisticsQuakeCache[year] = {
+        'year': year,
+        'mag6': sumMag6,
+        'mag7': sumMag7,
+        'mag8': sumMag8,
+        'mag9': sumMag9
+    };
+    return yearSet;
+};
+
+var extractEruptionDataForYear = (eData, year) => {
+    let eGeoJsonRecords = dataSource.toGeoJsonEruptionRecords(eData);
+    let yearSet = [];
+    let i = 0;
+    eGeoJsonRecords.forEach(g => {
+        if (g.properties['year'] === year) {
+            yearSet[i] = g;
+            i++;
+        }
+    });
+
+    geojsonEruptionCache[year] = yearSet;
+    return yearSet;
+};
+
+var sortFeaturesByDate = (a, b) => {
+    let yearDiff = b.properties.year - a.properties.year;
+    let monthDiff = b.properties.month - a.properties.month;
+    let dayDiff = b.properties.day - a.properties.day;
+    if (yearDiff !== 0) {
+        return yearDiff;
+    }
+    if (monthDiff !== 0) {
+        return monthDiff;
+    }
+    return dayDiff;
+};
